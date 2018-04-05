@@ -1,0 +1,5 @@
+# Wang Function Collapse
+
+Wave function collapse meets Wang tiles.
+
+Current status: working on performant wave function collapse.
