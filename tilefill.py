@@ -83,7 +83,6 @@ def params(match):
 
 @dep.template_task(
   (
-    "{batch}-tile-image",
     "{batch}-tile-patterns",
     "{batch}-tile-pmap",
     "{batch}-tile-{mode}-matchbooks",
@@ -91,10 +90,10 @@ def params(match):
   ),
   "{batch}-tile-{mode}-rules"
 )
-def extract_rules(_, image, patterns, pmap, matchbooks, params):
+def extract_rules(_, patterns, pmap, matchbooks, params):
   """
-  Extracts an returns a ruleset for the given image, dictating the possible
-  patterns and how each pattern affects surrounding probabilities.
+  Extracts an returns a ruleset for the given pattern set, dictating the
+  possible patterns and how each pattern affects surrounding probabilities.
   """
   pattern_radius = params["pattern_radius"]
   influence_radius = params["influence_radius"]
@@ -121,36 +120,6 @@ def extract_rules(_, image, patterns, pmap, matchbooks, params):
     "pattern_radius": pattern_radius,
     "influence_radius": influence_radius,
   }
-
-def blank_probabilities(patterns, size):
-  """
-  Returns a blank probabilities array of the given (2D) size.
-  """
-  return np.ones(list(size) + [len(patterns)]) / len(patterns)
-
-def vector_entropy(v):
-  """
-  Entropy of a 1-dimensional vector of probabilities.
-  """
-  return -sum(((e * math.log2(e)) if e > 0 else 0) for e in v)
-
-def entropy_at(probabilities, xy):
-  """
-  Returns entropy at the given position.
-  """
-  return vector_entropy(probabilities[xy[0],xy[1],:])
-
-def pick_pattern(probabilities, xy):
-  """
-  Randomly picks a pattern according to the probabilities at the given
-  position.
-  """
-  v = random.uniform(0, 1)
-  for i, e in enumerate(probabilities[xy[0],xy[1],:]):
-    v -= e
-    if v <= 0:
-      return i
-  return probabilities.shape[2]-1
 
 def apply_influence(probabilities, influence, xy):
   """
@@ -182,25 +151,19 @@ def apply_influence(probabilities, influence, xy):
         result /= sum(result)
         probabilities[ox, oy, :] = result
 
-def iterpairs(size):
-  """
-  Creates a list of all (x, y) pairs over the given (2D) matrix size, and
-  returns a shuffled version.
-  """
-  pairs = [ (x, y) for x in range(size[0]) for y in range(size[1]) ]
-  random.shuffle(pairs)
-  return pairs
-
 @dep.template_task(
   ("{batch}-tile-{mode}-rules", "{size}-size"),
-  "{batch}-tile-{mode}-filled-{size}"
+  "{batch}-tile-{mode}-probabilities-{size}"
 )
-def synthsize(_, ruleset, size):
+def synthesize(_, ruleset, size):
   """
   Synthesizes a probability table of the given size according to the given
   ruleset.
   """
-  return fill(blank_probabilities(ruleset["patterns"], size), ruleset)
+  return fill(
+    pattern.blank_probabilities(len(ruleset["patterns"]), size),
+    ruleset
+  )
 
 def fill(probabilities, ruleset, prefill=8):
   """
@@ -214,13 +177,13 @@ def fill(probabilities, ruleset, prefill=8):
   width, height = probabilities.shape[:2]
 
   # pick a random order for index traversal
-  myorder = iterpairs(probabilities.shape[:2])
+  myorder = pattern.iterpairs(probabilities.shape[:2])
 
   # remove already-fixed entries from our iteration list of fill targets
   fixed = []
   entropies = np.zeros(probabilities.shape[:2])
   for xy in myorder:
-    ent = entropy_at(probabilities, xy)
+    ent = pattern.entropy_at(probabilities, xy)
     entropies[xy[0], xy[1]] = ent
     if ent == 0:
       fixed.append(xy)
@@ -248,7 +211,7 @@ def fill(probabilities, ruleset, prefill=8):
           min_index = xy
 
     # Chose and apply a pattern:
-    chosen = pick_pattern(probabilities, min_index)
+    chosen = pattern.pick_probability(probabilities, min_index)
     apply_influence(
       probabilities,
       ruleset["rules"][chosen],
@@ -262,7 +225,7 @@ def fill(probabilities, ruleset, prefill=8):
         ox = min_index[0] + dx
         oy = min_index[1] + dy
         if ox >= 0 and ox < width and oy >= 0 and oy < height:
-          entropies[ox, oy] = entropy_at(probabilities, (ox, oy))
+          entropies[ox, oy] = pattern.entropy_at(probabilities, (ox, oy))
 
     # remove filled index from consideration
     myorder.remove(min_index)
@@ -270,63 +233,6 @@ def fill(probabilities, ruleset, prefill=8):
   print("--fill finished {}/{}--".format(to_fill, to_fill))
 
   return probabilities
-
-@dep.template_task(
-  ("{batch}-tile-{mode}-filled-{size}", "{batch}-tile-{mode}-rules"),
-  "{batch}-tile-{mode}-synth-{size}"
-)
-def create_image(name_match, probabilities, ruleset):
-  if name_match.groups(2) == "adjacent":
-    return create_adjacent_image(probabilities, ruleset)
-  else:
-    return create_overlapping_image(probabilities, ruleset)
-
-def create_adjacent_image(probabilities, ruleset):
-  """
-  Creates an image from a pattern probability matrix, using patterns from the
-  given ruleset.
-
-  This version puts tiles adjacent to each other.
-  """
-  patterns = ruleset["patterns"]
-  pr = ruleset["pattern_radius"]
-  pw = pr*2+1 # pattern width
-  chosen = np.argmax(probabilities, axis=2)
-  shape = [chosen.shape[0] * pw, chosen.shape[1] * pw] + [pattern.N_CHANNELS]
-  result = np.zeros(shape, dtype=int)
-  for x in range(chosen.shape[0]):
-    for y in range(chosen.shape[1]):
-      pat = patterns[chosen[x,y]]
-      for dx in range(pw):
-        for dy in range(pw):
-          pidx = (dx + dy*pw) * pattern.N_CHANNELS
-          result[x*pw + dx, y*pw + dy, :] = pat[pidx:pidx+pattern.N_CHANNELS]
-
-  return result
-
-def create_overlapping_image(probabilities, ruleset):
-  """
-  Another version of create_adjacent_image.
-
-  This version overlaps tiles, effectively using only the central pixel of each
-  tile.
-  """
-  patterns = ruleset["patterns"]
-  pr = ruleset["pattern_radius"]
-  nc = pattern.N_CHANNELS
-
-  pw = pr*2 + 1 # pattern width
-  pci = (pw*pr + pr) * nc # pattern center index
-
-  chosen = np.argmax(probabilities, axis=2)
-  shape = [chosen.shape[0], chosen.shape[1]] + [nc]
-  result = np.zeros(shape, dtype=int)
-  for x in range(chosen.shape[0]):
-    for y in range(chosen.shape[1]):
-      pat = patterns[chosen[x,y]]
-      result[x, y, :] = pat[pci:pci + nc]
-
-  return result
 
 def target_name(input_filename, pattern_radius, influence_radius, mode, size):
   """
