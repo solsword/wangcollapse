@@ -94,6 +94,6 @@ if __name__ == "__main__":
     #fill_tiles(fn)
     #collapse_wave_functions(fn)
     #animate_wave_function_collapse(fn)
-    #test_wang(fn)
+    #test_init(fn)
     #show_edges(fn)
-    test_init(fn)
+    test_wang(fn)

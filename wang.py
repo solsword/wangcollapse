@@ -224,15 +224,34 @@ def create_edge(template, compat_tables, c1, c2, orientation):
     "{batch}-wang-template",
     "{batch}-wfc-overlapping-compatibilities",
   ),
+  "{batch}-edge-{eid}"
+)
+def make_edge(name_match, template, compat_tables):
+  gd = name_match.groupdict()
+  c1, c2, ori = [int(x) for x in gd["eid"].split(':')]
+  return create_edge(template, compat_tables, c1, c2, ori)
+
+@dep.template_task(
+  (
+    "{batch}-wang-template",
+    "{batch}-wfc-overlapping-compatibilities",
+  ) + tuple(
+    "{{batch}}-edge-{c1}:{c2}:{ori}".format(
+      c1=c1,
+      c2=c2,
+      ori=ori
+    )
+      for (c1, c2, ori) in all_possible_edges(N_COLORS)
+  ),
   "{batch}-edges"
 )
-def edge_cache(_, template, compat_tables):
+def edge_cache(_, template, compat_tables, *edges):
   """
   Creates a cache of all edge templates from the given base template.
   """
   cache = {}
-  for (c1, c2, ori) in all_possible_edges(N_COLORS):
-    cache[(c1, c2, ori)] = create_edge(template, compat_tables, c1, c2, ori)
+  for i, (c1, c2, ori) in enumerate(all_possible_edges(N_COLORS)):
+    cache[(c1, c2, ori)] = edges[i]
 
   return cache
 
