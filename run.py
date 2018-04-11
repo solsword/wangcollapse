@@ -20,6 +20,7 @@ from quiche import dep
 import pattern
 import tilefill
 import wfc
+import wang
 
 FRAMERATE = 24
 
@@ -67,8 +68,32 @@ def animate_wave_function_collapse(fn, seconds_per_state=0.5):
   nfn = os.path.splitext(fn)[0] + ".collapsed.png"
   imsave(nfn, result[-1])
 
+def test_wang(fn):
+  tn = wang.target_name(fn, big=True)
+  #print(dep.recursive_target_report(tn))
+  #print(dep.find_target_report("samples/caves.png×1×3-rules"))
+  ts, result = dep.create(tn)
+  nfn = os.path.splitext(fn)[0] + ".wang.png"
+  imsave(nfn, result)
+
+def show_edges(fn):
+  tn = wang.edgeviz_target(fn)
+  ts, results = dep.create(tn)
+  for i, img in enumerate(results):
+    nfn = os.path.splitext(fn)[0] + ".edge.{}.png".format(i)
+    imsave(nfn, img)
+
+def test_init(fn):
+  tn = "{}×1:R-init-test".format(fn)
+  ts, result = dep.create(tn)
+  nfn = os.path.splitext(fn)[0] + ".itest.png"
+  imsave(nfn, result)
+
 if __name__ == "__main__":
   for fn in sys.argv[1:]:
     #fill_tiles(fn)
-    collapse_wave_functions(fn)
+    #collapse_wave_functions(fn)
     #animate_wave_function_collapse(fn)
+    #test_wang(fn)
+    #show_edges(fn)
+    test_init(fn)

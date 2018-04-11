@@ -67,6 +67,16 @@ def pattern_at(image, xy, pattern_radius=1):
 
   return tuple(pattern.flatten())
 
+def center_of(pattern):
+  """
+  Returns the central vector of the given pattern as a tuple.
+  """
+  pw = int((len(pattern) / N_CHANNELS)**0.5)
+  pr = pw//2
+  pci = (pw*pr + pr) * N_CHANNELS # pattern center index
+
+  return pattern[pci:pci+N_CHANNELS]
+
 def edge_of(pattern, side, pattern_radius=1):
   """
   Extracts the edge identity of the given side of the given pattern.

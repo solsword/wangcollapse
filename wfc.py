@@ -5,6 +5,7 @@ Wave function collapse: propagates adjacency constraint info to fill in tiles.
 """
 
 import random
+import queue
 
 from quiche import dep
 
@@ -12,11 +13,11 @@ import numpy as np
 
 import pattern
 
-def batchname(image, pattern_radius=1):
+def batchname(image, pattern_radius=1, add_rotations=False):
   """
   Converts batch parameters to a string.
   """
-  return image + "×" + str(pattern_radius)
+  return image + "×" + str(pattern_radius) + (":R" if add_rotations else "")
 
 def batch_params(batchname):
   """
@@ -231,9 +232,10 @@ def update_all_possibilities(
   """
   width = possibilities.shape[0]
   height = possibilities.shape[1]
-  changed = [ start_at ]
-  while changed:
-    xy = changed.pop()
+  changed = queue.Queue()
+  changed.put_nowait(start_at)
+  while not changed.empty():
+    xy = changed.get_nowait()
     if psums[xy] == 0:
       # don't propagate
       continue
@@ -267,7 +269,7 @@ def update_all_possibilities(
           except:
             pass
         if nsum >= 1:
-          changed.append(nb)
+          changed.put_nowait(nb)
         # don't propagate from inconsistent spaces
       # else do nothing
 

@@ -4,6 +4,15 @@ wang.py
 Wang tiling code (corner-based).
 """
 
+import random
+
+import numpy as np
+
+from quiche import dep
+
+import pattern
+import wfc
+
 # Size of each supergrid tile
 SGSIZE = 16
 
@@ -20,8 +29,6 @@ N_COLORS = 4
 
 VERTICAL = 0
 HORIZONTAL = 1
-
-import wfc
 
 def hash(x, y):
   """
@@ -51,25 +58,26 @@ def supertile(pos):
 
 def wang_params(spos):
   """
-  Returns a set of wang tiling params for the given supertile location.
+  Returns a set of wang tiling params for the given supertile location. Returns
+  corner colors in clockwise order from the top left.
   """
-  sgx = pos[0]//SGSIZE
-  sgy = pos[1]//SGSIZE
+  sgx = spos[0]
+  sgy = spos[1]
 
   # colors
   c_ul = hash(sgx, sgy) % N_COLORS 
   c_ur = hash(sgx+1, sgy) % N_COLORS
-  c_bl = hash(sgx, sgy+1) % N_COLORS
   c_br = hash(sgx+1, sgy+1) % N_COLORS
+  c_bl = hash(sgx, sgy+1) % N_COLORS
 
-  return (c_ul, c_ur, c_bl, c_br)
+  return (c_ul, c_ur, c_br, c_bl)
 
 def wang_edges(wang_params):
   """
   Converts Wang tile corner color parameters into edge color pairs. Uses north,
-  east, south west ordering and clockwise color ordering within edges.
+  east, south, west ordering and clockwise color ordering within edges.
   """
-  ul, ur, bl, br = wang_params
+  ul, ur, br, bl = wang_params
   return ((ul, ur), (ur, br), (br, bl), (bl, ul))
 
 def all_possible_edges(n_colors):
@@ -80,14 +88,14 @@ def all_possible_edges(n_colors):
   for orientation in (VERTICAL, HORIZONTAL):
     for c1 in range(n_colors):
       for c2 in range(n_colors):
-        result.add((c1, c2, side))
+        result.add((c1, c2, orientation))
 
   return list(result)
 
 @dep.template_task(
   (
     "{batch}-wang-template",
-    "{batch}-compatibilities",
+    "{batch}-wfc-overlapping-compatibilities",
   ),
   "{batch}-{c1}:{c2}:{ori}-edge"
 )
@@ -124,10 +132,11 @@ def create_edge(template, compat_tables, c1, c2, orientation):
                    2
 
   """
+  n_pat = compat_tables[0].shape[0]
   if orientation == 0: # vertical edge
-    result = np.ones([2*SGSIZE, SGSIZE], dtype=np.bool_)
+    result = np.ones([2*SGSIZE, SGSIZE, n_pat], dtype=np.bool_)
   else:
-    result = np.ones([SGSIZE, 2*SGSIZE], dtype=np.bool_)
+    result = np.ones([SGSIZE, 2*SGSIZE, n_pat], dtype=np.bool_)
 
   c1p = color_pos(c1)
   c2p = color_pos(c2)
@@ -190,26 +199,30 @@ def create_edge(template, compat_tables, c1, c2, orientation):
   if orientation == 0:
     for x in range(2*SGSIZE):
       for y in range(SGSIZE):
-        dx = abs(SGSIZE - x)
+        dx = max(x - SGSIZE, SGSIZE - 1 - x)
         dy = min(y, SGSIZE - 1 - y)
-        if y == 0 or y == SGSIZE - 1 and dx > dy:
-          result[x, y, :] = 1
+        if y == 0 or y == SGSIZE - 1:
+          if dx > dy:
+            result[x, y, :] = 1
         elif dx >= dy:
           result[x, y, :] = 1
   else:
     for x in range(SGSIZE):
       for y in range(2*SGSIZE):
         dx = min(x, SGSIZE - 1 - x)
-        dy = abs(SGSIZE - y)
-        if x == 0 or x == SGSIZE - 1 and dy > dx:
-          result[x, y, :] = 1
+        dy = max(y - SGSIZE, SGSIZE - 1 - y)
+        if x == 0 or x == SGSIZE - 1:
+          if dy > dx:
+            result[x, y, :] = 1
         elif dy >= dx:
           result[x, y, :] = 1
+
+  return result
 
 @dep.template_task(
   (
     "{batch}-wang-template",
-    "{batch}-compatibilities",
+    "{batch}-wfc-overlapping-compatibilities",
   ),
   "{batch}-edges"
 )
@@ -226,11 +239,26 @@ def edge_cache(_, template, compat_tables):
 @dep.template_task(
   (
     "{batch}-edges",
-    "{batch}-compatibilities",
+    "{batch}-wfc-patterns",
+  ),
+  "{batch}-edge-images"
+)
+def viz_edges(_, edges, patterns):
+  results = []
+  print("{} edges...".format(len(edges)))
+  for k in edges:
+    results.append(pattern.create_overlapping_image(edges[k], patterns))
+
+  return results
+
+@dep.template_task(
+  (
+    "{batch}-edges",
+    "{batch}-wfc-overlapping-compatibilities",
   ),
   "{batch}-supertile-{sx}:{sy}"
 )
-def build_tile_task(name_match, edge_cache, compat_tables)
+def build_tile_task(name_match, edge_cache, compat_tables):
   gd = name_match.groupdict()
   sx = int(gd["sx"])
   sy = int(gd["sy"])
@@ -260,4 +288,142 @@ def init_tile(spos, edge_cache):
   & et[      :SGSIZE,       :      , : ]
   & st[      :      ,       :SGSIZE, : ]
   & wt[SGSIZE:      ,       :      , : ]
+  )
+
+@dep.template_task(
+  (
+    "{batch}-edges",
+    "{batch}-wfc-patterns",
+  ),
+  "{batch}-init-test"
+)
+def test_init(_, edge_cache, patterns):
+  t1 = init_tile((5, 5), edge_cache)
+  t2 = init_tile((6, 5), edge_cache)
+  t3 = init_tile((5, 6), edge_cache)
+  t4 = init_tile((6, 6), edge_cache)
+  region = assemble_region([t1, t2, t3, t4], 2, 2)
+  return pattern.create_overlapping_image(region, patterns)
+
+
+# A simple template alias:
+@dep.template_task(
+  (
+    "{{batch}}-wfc-overlapping-probabilities-{size}".format(
+      size="{n}×{n}".format(n=TEMPLATE_SIZE)
+    ),
+  ),
+  "{batch}-wang-template"
+)
+def create_wang_template(_, value):
+  return value
+
+def tile_at(params, pos):
+  """
+  Function for fetching the tile at the given position.
+  """
+  batch = wfc.batchname(
+    params["filename"],
+    params["pattern_radius"],
+    params["add_rotations"]
+  )
+  spos = supertile(pos)
+  ts, result = dep.create_brave(
+    "{batch}-supertile-{sx}:{sy}".format(
+      batch=batch,
+      sx=spos[0],
+      sy=spos[1]
+    )
+  )
+  ipos = (pos[0] % SGSIZE, pos[1] % SGSIZE)
+
+  possibilities = result[ipos[0], ipos[1], :]
+  pidx = np.argmax(possibilities)
+
+  ts, patterns = dep.create_brave("{batch}-wfc-patterns".format(batch=batch))
+
+  return pattern.center_of(patterns[pidx])
+
+def supertile_at(params, spos):
+  """
+  Fetches a whole supertile at once, putting less strain on the caching system.
+  """
+  batch = wfc.batchname(
+    params["filename"],
+    params["pattern_radius"],
+    params["add_rotations"]
+  )
+  ts, result = dep.create_brave(
+    "{batch}-supertile-{sx}:{sy}".format(
+      batch=batch,
+      sx=spos[0],
+      sy=spos[1]
+    )
+  )
+
+  ts, patterns = dep.create_brave("{batch}-wfc-patterns".format(batch=batch))
+
+  return pattern.create_overlapping_image(result, patterns)
+
+def assemble_region(pieces, width, height):
+  """
+  Assembles N-dimensional pieces by concatenating along their 1st and 2nd
+  dimensions.
+  """
+  rows = []
+  for r in range(height):
+    rows.append(np.concatenate(pieces[r*width:(r+1)*width], axis=0))
+  return np.concatenate(rows, axis=1)
+
+@dep.template_task(
+  (
+    "{batch}-wfc-patterns",
+    "{batch}-supertile-175:342",
+    "{batch}-supertile-176:342",
+    "{batch}-supertile-177:342",
+    "{batch}-supertile-175:343",
+    "{batch}-supertile-176:343",
+    "{batch}-supertile-177:343",
+    "{batch}-supertile-175:344",
+    "{batch}-supertile-176:344",
+    "{batch}-supertile-177:344",
+  ),
+  "{batch}-wang-test"
+)
+def wang_test(_, patterns, *supertiles):
+  images = [
+    pattern.create_overlapping_image(st, patterns)
+    for st in supertiles
+  ]
+  return assemble_region(images, 3, 3)
+
+@dep.template_task(
+  (
+    "{batch}-wfc-patterns",
+  ) + tuple(
+    "{{batch}}-supertile-{x}:{y}".format(
+      x=x,
+      y=y
+    )
+      for y in range(19820, 19828)
+      for x in range(182, 190)
+  ),
+  "{batch}-wang-bigtest"
+)
+def wang_bigtest(_, patterns, *supertiles):
+  images = [
+    pattern.create_overlapping_image(st, patterns)
+    for st in supertiles
+  ]
+  return assemble_region(images, 8, 8)
+
+def target_name(input_filename, big=False):
+  return "{batch}-wang-{big}test".format(
+    batch=wfc.batchname(input_filename, 1, True),
+    big="big" if big else ""
+  )
+
+def edgeviz_target(input_filename):
+  return "{batch}-edge-images".format(
+    batch=wfc.batchname(input_filename, 1, True),
   )
