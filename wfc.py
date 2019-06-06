@@ -36,7 +36,7 @@ def batch_params(batchname):
     "add_rotations": add_rotations,
   }
 
-@dep.template_task((), "{batch}-wfc-params")
+@dep.template_task((), (), "{batch}-wfc-params")
 def params(match):
   """
   Task that unpacks params according to batch name.
@@ -48,6 +48,7 @@ def params(match):
     "{batch}-wfc-{mode}-compatibilities",
     "{size}-size"
   ),
+  (),
   "{batch}-wfc-{mode}-probabilities-{size}"
 )
 def synthesize(_, compatibility_tables, size):
@@ -65,6 +66,7 @@ def synthesize(_, compatibility_tables, size):
     "{batch}-wfc-{mode}-compatibilities",
     "{size}-size"
   ),
+  (),
   "{batch}-wfc-{mode}-probability-sequence-{size}"
 )
 def synth_sequence(_, compatibility_tables, size):

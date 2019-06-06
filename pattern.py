@@ -227,6 +227,7 @@ def bfs_order(size, start):
 
 @dep.template_task(
   ("{batch}-image", "{batch}-params"),
+  (),
   "{batch}-patterns"
 )
 def all_patterns(_, image, params):
@@ -268,7 +269,7 @@ def rotate_pattern(pattern):
 
   return tuple(result)
 
-@dep.template_task(("{batch}-patterns",), "{batch}-pmap")
+@dep.template_task(("{batch}-patterns",), (), "{batch}-pmap")
 def pmap(_, patterns):
   return {
     pat: i
@@ -277,6 +278,7 @@ def pmap(_, patterns):
 
 @dep.template_task(
   ("{batch}-patterns", "{batch}-pmap", "{batch}-params"),
+  (),
   "{batch}-adjacent-matchbooks"
 )
 def adjacent_matchbooks(_, patterns, pmap, params):
@@ -294,6 +296,7 @@ def adjacent_matchbooks(_, patterns, pmap, params):
 
 @dep.template_task(
   ("{batch}-patterns", "{batch}-pmap", "{batch}-params"),
+  (),
   "{batch}-overlapping-matchbooks"
 )
 def overlapping_matchbooks(_, patterns, pmap, params):
@@ -312,7 +315,7 @@ def overlapping_matchbooks(_, patterns, pmap, params):
   print("--done building matchbooks: {n}/{n}--".format(n=len(patterns)))
   return books
 
-@dep.template_task(("{batch}-matchbooks",), "{batch}-compatibilities")
+@dep.template_task(("{batch}-matchbooks",), (), "{batch}-compatibilities")
 def compatibility_matrices(_, matchbooks):
   """
   Converts a matchbooks dictionary into a pair of vertical and horizontal
@@ -393,6 +396,7 @@ def pick_possibility(possibilities, xy):
 
 @dep.template_task(
   ("{batch}-{mode}-probabilities-{size}", "{batch}-patterns"),
+  (),
   "{batch}-{mode}-synth-{size}"
 )
 def create_image(name_match, probabilities, patterns):
@@ -403,6 +407,7 @@ def create_image(name_match, probabilities, patterns):
 
 @dep.template_task(
   ("{batch}-{mode}-probability-sequence-{size}", "{batch}-patterns"),
+  (),
   "{batch}-{mode}-seqsynth-{size}"
 )
 def create_image_sequence(name_match, pseq, patterns):

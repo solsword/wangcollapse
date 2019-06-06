@@ -26,11 +26,11 @@ FRAMERATE = 24
 
 # Common targets
 
-@dep.template_task((), "{size}-size")
+@dep.template_task((), (), "{size}-size")
 def determine_size(match):
   return tuple(int(x) for x in match.group(1).split("×"))
 
-@dep.template_task(("{batch}-params",), "{batch}-image")
+@dep.template_task(("{batch}-params",), (), "{batch}-image")
 def load_image(_, params):
   fn = params["filename"]
   im = imread(fn)
@@ -93,7 +93,7 @@ if __name__ == "__main__":
   for fn in sys.argv[1:]:
     #fill_tiles(fn)
     #collapse_wave_functions(fn)
-    #animate_wave_function_collapse(fn)
+    animate_wave_function_collapse(fn)
     #test_init(fn)
     #show_edges(fn)
-    test_wang(fn)
+    #test_wang(fn)

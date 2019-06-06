@@ -74,7 +74,7 @@ def batch_params(batchname):
   ir = int(fields[2])
   return { "filename": fn, "pattern_radius": pr, "influence_radius": ir }
 
-@dep.template_task((), "{batch}-tile-params")
+@dep.template_task((), (), "{batch}-tile-params")
 def params(match):
   """
   Task that unpacks params according to batch name.
@@ -88,6 +88,7 @@ def params(match):
     "{batch}-tile-{mode}-matchbooks",
     "{batch}-tile-params"
   ),
+  (),
   "{batch}-tile-{mode}-rules"
 )
 def extract_rules(_, patterns, pmap, matchbooks, params):
@@ -153,6 +154,7 @@ def apply_influence(probabilities, influence, xy):
 
 @dep.template_task(
   ("{batch}-tile-{mode}-rules", "{size}-size"),
+  (),
   "{batch}-tile-{mode}-probabilities-{size}"
 )
 def synthesize(_, ruleset, size):

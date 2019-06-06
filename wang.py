@@ -97,6 +97,7 @@ def all_possible_edges(n_colors):
     "{batch}-wang-template",
     "{batch}-wfc-overlapping-compatibilities",
   ),
+  (),
   "{batch}-{c1}:{c2}:{ori}-edge"
 )
 def edge_task(name_match, template, compat_tables):
@@ -224,6 +225,7 @@ def create_edge(template, compat_tables, c1, c2, orientation):
     "{batch}-wang-template",
     "{batch}-wfc-overlapping-compatibilities",
   ),
+  (),
   "{batch}-edge-{eid}"
 )
 def make_edge(name_match, template, compat_tables):
@@ -243,6 +245,7 @@ def make_edge(name_match, template, compat_tables):
     )
       for (c1, c2, ori) in all_possible_edges(N_COLORS)
   ),
+  (),
   "{batch}-edges"
 )
 def edge_cache(_, template, compat_tables, *edges):
@@ -260,6 +263,7 @@ def edge_cache(_, template, compat_tables, *edges):
     "{batch}-edges",
     "{batch}-wfc-patterns",
   ),
+  (),
   "{batch}-edge-images"
 )
 def viz_edges(_, edges, patterns):
@@ -275,6 +279,7 @@ def viz_edges(_, edges, patterns):
     "{batch}-edges",
     "{batch}-wfc-overlapping-compatibilities",
   ),
+  (),
   "{batch}-supertile-{sx}:{sy}"
 )
 def build_tile_task(name_match, edge_cache, compat_tables):
@@ -314,6 +319,7 @@ def init_tile(spos, edge_cache):
     "{batch}-edges",
     "{batch}-wfc-patterns",
   ),
+  (),
   "{batch}-init-test"
 )
 def test_init(_, edge_cache, patterns):
@@ -332,6 +338,7 @@ def test_init(_, edge_cache, patterns):
       size="{n}×{n}".format(n=TEMPLATE_SIZE)
     ),
   ),
+  (),
   "{batch}-wang-template"
 )
 def create_wang_template(_, value):
@@ -407,6 +414,7 @@ def assemble_region(pieces, width, height):
     "{batch}-supertile-176:344",
     "{batch}-supertile-177:344",
   ),
+  (),
   "{batch}-wang-test"
 )
 def wang_test(_, patterns, *supertiles):
@@ -427,6 +435,7 @@ def wang_test(_, patterns, *supertiles):
       for y in range(19820, 19828)
       for x in range(182, 190)
   ),
+  (),
   "{batch}-wang-bigtest"
 )
 def wang_bigtest(_, patterns, *supertiles):
